@@ -55,7 +55,7 @@ class ipmi:
 
     def bso_auth(self, console, username, password):
         time.sleep(2)
-        console.sendline('telnet git.linux.ibm.com')
+        console.sendline('telnet github.com')
         time.sleep(5)
         try:
             rc = console.expect(["Username:", "refused", "login:"], timeout=60)

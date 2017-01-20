@@ -150,7 +150,6 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
 
     if not check_ls(obj, console, 'avocado-fvt-wrapper'):
         logging.error("\nProblem in cloning avocado repo")
-        sys.exit(1)
     obj.run_cmd('cd avocado-fvt-wrapper', console)
     obj.run_cmd(commonlib.avocado_clean, console)
     obj.run_cmd('cd /root/', console)
@@ -344,7 +343,7 @@ def main():
     parser.add_argument("--host", action="store", dest="host", help="Specify the machine ip, linux username and linux password\
                         Usage: --host 'hostname=hostname,username=username,password=password'")
     parser.add_argument("--args", action="store", dest="args",
-                        help="Specify the kernel git tree and kernel git branch Usage: --args 'host_kernel_git=git_link,host_kernel_branch=branch'")
+                        help="Specify the kernel git tree and kernel git branch Usage: --args 'host_kernel_git=git_link,host_kernel_branch=branch,kernel_config=configfile,patches=patchfile'")
     parser.add_argument("--tests", action="store", dest="tests", help="Specify the tests to perform\
                         Usage: --tests 'test_name1,test_name2,test_name3'")
     parser.add_argument("--list", action="store", dest="list", help="lists the tests available to run\
@@ -383,6 +382,11 @@ def main():
             print "\nUsage: python run_test.py --list autotest\nUsage:   --tests ltp \n\t --tests 'ltp,fio,dbench,fsfuzzer'"
             tests.close()
             sys.exit(0)
+
+    if options.avtest:
+        print "ERROR:  No avocado support!!!"
+        print "\nUsage: python run_test.py --list autotest\n"
+        sys.exit(0)
 
     if options.host:
         logging.info('%s', options.host)
