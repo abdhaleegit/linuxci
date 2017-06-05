@@ -13,6 +13,7 @@
 #
 # Copyright: 2017 IBM
 # Author: Harish <harish@linux.vnet.ibm.com>
+# Abdul Haleem <abdhalee@linux.vnet.ibm.com>
 
 import os
 import sys
@@ -21,6 +22,10 @@ import argparse
 sys.path.append(
     os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 from lib import common_lib as commonlib
+
+local_path = commonlib.get_output('pwd') + '/'
+build = os.path.join(local_path, 'linuxci/lib/build.sh')
+boot = os.path.join(local_path, 'linuxci/lib/boot.sh')
 
 
 def scp_id(sid, host_details):
@@ -32,8 +37,7 @@ def scp_id(sid, host_details):
     sid_json = commonlib.read_json(
         commonlib.base_path + sid + '/' + sid + '.json')
     if sid_json['CONFIG'] == '' and sid_json['PATCH'] == '':
-        print "NO FILES TO SCP"
-        return
+        print "NO PATCH and CONFIG FILES TO SCP"
     else:
         if sid_json['CONFIG'] == '' or 'make' in sid_json['CONFIG']:
             config = ''
@@ -42,7 +46,10 @@ def scp_id(sid, host_details):
             config = sid_json['CONFIG']
         if sid_json['PATCH'] == '':
             print "NO PATCH FILE"
-        commonlib.scp_to_host(config + ' ' + sid_json['PATCH'], host_details)
+            patch = ''
+    files = "%s %s %s %s" % (config, patch, build, boot)
+    commonlib.scp_to_host(files, host_details)
+    return
 
 
 def scp_manual(config, patch, host_details):
@@ -54,7 +61,6 @@ def scp_manual(config, patch, host_details):
 
     if not os.path.exists(config) and not os.path.exists(patch):
         print "NO CONFIG FILE AND PATCH FILE"
-        return
     else:
         if not os.path.exists(config) or 'make' in config:
             config = ''
@@ -62,9 +68,9 @@ def scp_manual(config, patch, host_details):
         if not os.path.exists(patch):
             patch = ''
             print "NO PATCH FILE"
-        commonlib.scp_to_host(config + ' ' +
-                              patch, host_details)
-
+    files = "%s %s %s %s" % (config, patch, build, boot)
+    commonlib.scp_to_host(files, host_details)
+    return
 
 def main():
     parser = argparse.ArgumentParser()

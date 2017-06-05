@@ -28,8 +28,8 @@ from datetime import date
 
 SID = ''
 sidfile = commonlib.base_path + SID + '/' + SID + '.json'
-DATENOW = datetime.datetime.now().strftime('%Y_%m_%d')
-
+date_str = datetime.datetime.now().strftime('%Y_%m_%d')
+date_obj = datetime.datetime.strptime(date_str, '%Y_%m_%d')
 
 def form_sid(sid, mailid, git, branch, tests, avtest):
     git = git.split('/')[-2]
@@ -107,18 +107,6 @@ def add_job_inQ(sid, mailid, git, branch, tests, avtest):
             time.sleep(0.1)
 
 
-def get_sid_list():
-    '''
-    Get the list of Subscription ID's from subscription.json
-    '''
-    sidlist = []
-    subfile = commonlib.read_json(commonlib.base_path + 'subscribers.json')
-    for sid in subfile:
-        sidlist.append(sid['SID'])
-    print sidlist
-    return sidlist
-
-
 def get_datafile_info(sid):
     '''
     for the given subscription id get me the data file path and information
@@ -142,25 +130,6 @@ def update_datafile(sid, json_data):
     if os.path.isfile(path):
         commonlib.update_json(path, json_data)
 
-
-def oneday(cr_date):
-    return str((datetime.datetime.strptime(cr_date, '%Y_%m_%d') + datetime.timedelta(days=1)).strftime('%Y_%m_%d'))
-
-
-def oneweek(cr_date):
-    return str((datetime.datetime.strptime(cr_date, '%Y_%m_%d') + datetime.timedelta(days=7)).strftime('%Y_%m_%d'))
-
-
-def onemonth(cr_date):
-    m, y = (cr_date.month + 1) % 12, cr_date.year + \
-        ((cr_date.month) + 1 - 1) // 12
-    if not m:
-        m = 12
-    d = min(cr_date.day, [31, 29 if y % 4 == 0 and not y % 400 ==
-                          0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1])
-    return cr_date.replace(day=d, month=m, year=y).strftime('%Y_%m_%d')
-
-
 def get_subscrptn_date(sid):
     '''
     return the subscription date for the given sid
@@ -170,8 +139,8 @@ def get_subscrptn_date(sid):
     for dicts in subfile:
         if sid in dicts.values():
             subdate = datetime.datetime.now().strftime('%Y_%m_%d')
-            if subdate < DATENOW:
-                dicts['DATE'] = DATENOW
+            if subdate < date_str:
+                dicts['DATE'] = date_str
             return dicts['DATE']
     return None
 
@@ -211,7 +180,7 @@ def print_Q():
 def main():
     sublist = []
     check_Qfile()
-    sublist = get_sid_list()
+    sublist = commonlib.get_sid_list()
     for SID in sublist:
         json_data = get_datafile_info(SID)
         LASTRUN = json_data['LASTRUN']
@@ -223,42 +192,38 @@ def main():
         AVTEST = json_data['AVTEST']
         GIT = json_data['URL']
         BRANCH = json_data['BRANCH']
-        datenow = datetime.datetime.strptime(DATENOW, '%Y_%m_%d')
         while not check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
 
             if LASTRUN is None:
                 if BUILDFREQ == 'daily':
-                    json_data['NEXTRUN'] = oneday(DATESUB)
+                    json_data['NEXTRUN'] = commonlib.oneday(date_str)
                 if BUILDFREQ == 'weekly':
-                    json_data['NEXTRUN'] = oneweek(DATESUB)
+                    json_data['NEXTRUN'] = commonlib.oneweek(date_str)
                 if BUILDFREQ == 'monthly':
-                    DATESUB = datetime.datetime.strptime(DATESUB, '%Y_%m_%d')
-                    json_data['NEXTRUN'] = onemonth(DATESUB)
+                    json_data['NEXTRUN'] = commonlib.onemonth(date_obj)
                 update_datafile(SID, json_data)
                 print "always a candidate for Q"
                 add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                 if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
                     print SID + " Job added to Queue succesfully !"
-            if LASTRUN is not None:
+            else:
                 lastrun = datetime.datetime.strptime(LASTRUN, '%Y_%m_%d')
                 if NEXTRUN is not None:
                     nextrun = datetime.datetime.strptime(NEXTRUN, '%Y_%m_%d')
                 if lastrun > nextrun:
-                    json_data['LASTRUN'] = DATENOW
+                    json_data['LASTRUN'] = date_str
                     update_datafile(SID, json_data)
-                if nextrun <= datenow and lastrun != datenow:
+                if nextrun <= date_obj and lastrun != date_obj:
                     print "It is a candidate add for Q"
                     add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                     if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
                         print SID + " Job added to Queue succesfully !"
                     if BUILDFREQ == 'daily':
-                        json_data['NEXTRUN'] = oneday(LASTRUN)
+                        json_data['NEXTRUN'] = commonlib.oneday(LASTRUN)
                     if BUILDFREQ == 'weekly':
-                        json_data['NEXTRUN'] = oneweek(LASTRUN)
+                        json_data['NEXTRUN'] = commonlib.oneweek(LASTRUN)
                     if BUILDFREQ == 'monthly':
-                        LASTRUN = datetime.datetime.strptime(
-                            LASTRUN, '%Y_%m_%d')
-                        json_data['NEXTRUN'] = onemonth(LASTRUN)
+                        json_data['NEXTRUN'] = commonlib.onemonth(lastrun)
                     update_datafile(SID, json_data)
             break
     print "\nList all jobs in Queue . . .  \n"

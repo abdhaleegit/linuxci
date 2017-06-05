@@ -11,7 +11,7 @@
 #
 # See LICENSE for more details.
 #
-# Copyright: 2016 IBM
+# Copyright: 2017 IBM
 # Author:  Satheesh Rajendran <sathnaga@linux.vent.ibm.com>
 
 import telnetlib

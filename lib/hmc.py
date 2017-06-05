@@ -1,4 +1,4 @@
-!/usr/bin/env python
+#!/usr/bin/env python
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
 # Copyright: 2017 IBM
 # Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
 #       : Harish <harish@linux.vnet.ibm.com>
+#       : Rajashree Rajendran <rajashre@in.ibm.com>
 
 import os
 import sys
@@ -60,7 +61,7 @@ class hmc:
             time.sleep(0.5)
             res = self.s.before
             self.s.sendline("echo $?")
-            self.s.prompt(timeout=30)
+            self.s.prompt(timeout=3000)
             time.sleep(0.5)
             self.check = self.s.before
             if("0" in self.check):
@@ -74,7 +75,7 @@ class hmc:
 
     def check_kernel_panic(self, console):
         list = [
-            "Kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC",
+            "WARNING: CPU:", "Kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC",
             "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)", pexpect.TIMEOUT]
         try:
             rc = console.expect(list, timeout=120)
@@ -132,7 +133,7 @@ class hmc:
 
     def bso_auth(self, console, username, password):
         time.sleep(2)
-        console.sendline('telnet github.com')
+        console.sendline('telnet 9.xx.xx.xx')
         console.send("\r")
         time.sleep(5)
         try:
@@ -165,7 +166,7 @@ class hmc:
             print str(e)
             sys.exit(1)
 
-    def run_cmd(self, cmd, console, timeout=300):
+    def run_cmd(self, cmd, console, timeout=5000):
         time.sleep(2)
         console.sendline(cmd)
         console.send('\r')
@@ -280,7 +281,7 @@ class hmc:
             con.sendline("mkvterm -m " + server_name + " -p " + lpar_name)
             con.send('\r')
             con.send('\r')
-            time.sleep(5)
+            time.sleep(20)
             i = con.expect(["Main Menu", pexpect.TIMEOUT], timeout=30)
             if i == 0:
                 i = con.expect(["key:", pexpect.TIMEOUT], timeout=30)
