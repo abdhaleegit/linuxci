@@ -56,11 +56,11 @@ def pop_sid(SID):
             with open(commonlib.schedQfile, 'w') as n:
                 fcntl.flock(n, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 for item in lines:
-                    if SID not in item.strip('\n'):
+                    if SID + '-' not in item.strip('\n'):
                         n.write(item)
                 fcntl.flock(n, fcntl.LOCK_UN)
                 n.close()
-            if SID not in open(commonlib.schedQfile).read():
+            if SID + '-' not in open(commonlib.schedQfile).read():
                 return True
             return False
         except IOError as ex:
@@ -95,7 +95,9 @@ def main():
                         commonlib.add_machineQ(machine)
                         if pop_sid(SID):
                             print "SID=" + SID
-                            keyvals = {'kernel_git_repo': json_data['URL'], 'kernel_git_repo_branch': json_data['BRANCH'], 'configfile': json_data['CONFIG'], 'patchfile': json_data[
+                            if 'INPUTFILE' not in json_data:
+                                json_data['INPUTFILE'] = 'None'
+                            keyvals = {'kernel_git_repo': json_data['URL'], 'kernel_git_repo_branch': json_data['BRANCH'], 'inputfile': json_data['INPUTFILE'], 'configfile': json_data['CONFIG'], 'patchfile': json_data[
                                 'PATCH'], 'tests': json_data['TESTS'], 'avtest': json_data['AVTEST'], 'buildmachine': json_data['BUILDMACHINE'], 'bootdisk': json_data['BOOTDISK']}
                             for key, val in keyvals.items():
                                 print key + "=" + str(val)

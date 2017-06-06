@@ -43,16 +43,34 @@ def main():
 
     options = parser.parse_args()
     if options.id:
+        json_path = "%s%s/%s.json" % (
+            commonlib.base_path, options.id, options.id)
         logging.info("UPDATING DATAFILE OF SUBSCRIPTION")
-        old_json = commonlib.read_json(
-            commonlib.base_path + options.id + '/' + options.id + '.json')
+        old_json = commonlib.read_json(json_path)
         old_json['LASTRUN'] = datetime.datetime.now().strftime('%Y_%m_%d')
+        if 'PASS' in options.result:
+            old_json['GOOD'] = old_json['HEAD']
+        if 'FAIL' in options.result:
+            old_json['BAD'] = old_json['HEAD']
+
+        commonlib.update_json(json_path, old_json)
+        nextrun = datetime.datetime.strptime(old_json['NEXTRUN'], '%Y_%m_%d')
+        lastrun = datetime.datetime.strptime(old_json['LASTRUN'], '%Y_%m_%d')
+
         logging.info("\n Run Completed on %s", old_json['LASTRUN'])
-        logging.info("\n Next run will be on %s", old_json['NEXTRUN'])
-        old_json['COMMITID'] = commonlib.get_output(
-            "git ls-remote " + options.git + " " + options.branch + " | head -n1 | awk '{print $1;}'")
+        if nextrun <= lastrun:
+            if old_json['BUILDFREQ'] == 'daily':
+                old_json['NEXTRUN'] = commonlib.oneday(old_json['LASTRUN'])
+            if old_json['BUILDFREQ'] == 'weekly':
+                old_json['NEXTRUN'] = commonlib.oneweek(old_json['LASTRUN'])
+            if old_json['BUILDFREQ'] == 'monthly':
+                old_json['NEXTRUN'] = commonlib.onemonth(lastrun)
+        cmd = "git ls-remote %s %s | head -n1 | awk '{print $1;}'" % (
+            old_json['URL'], old_json['BRANCH'])
+        old_json['COMMITID'] = commonlib.get_output(cmd).strip('\n')
         commonlib.update_json(
             commonlib.base_path + options.id + '/' + options.id + '.json', old_json)
+        logging.info("\n Next run will be on %s", old_json['NEXTRUN'])
         sub_json = commonlib.read_json(
             commonlib.base_path + 'subscribers.json')
         for sub in sub_json:
@@ -60,10 +78,12 @@ def main():
                 sub['STATUS'] = options.result
         commonlib.update_json(
             commonlib.base_path + 'subscribers.json', sub_json)
-        logging.info("\nREMOVE MACHINE FROM QUEUE")
-        # TODO : Good to remove machine outside script, incase script hung
-        if commonlib.remove_machineQ(old_json['BUILDMACHINE']):
-            logging.info("\n%s removed from queue\n", old_json['BUILDMACHINE'])
+        if 'PASS' in options.result:
+            logging.info("\nREMOVE MACHINE FROM QUEUE")
+            # TODO : Good to remove machine outside script, incase script hung
+            if commonlib.remove_machineQ(old_json['BUILDMACHINE']):
+                logging.info(
+                    "\n%s removed from queue\n", old_json['BUILDMACHINE'])
     else:
         logging.info("UPDATING DATAFILE OF USER TRIGGERS")
         new_json = {}

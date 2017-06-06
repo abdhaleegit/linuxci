@@ -12,8 +12,8 @@
 # See LICENSE for more details.
 #
 # Copyright: 2017 IBM
-# Author: Harish <harish@linux.vnet.ibm.com>
-#         Abdul Haleem <abdhalee@linux.vnet.ibm.com>
+# Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
+#       : Harish <harish@linux.vnet.ibm.com>
 
 import os
 import time
@@ -40,15 +40,32 @@ def tear_down(obj, console):
     2. autotest
     3. avocado-fvt-wrapper
     4. patches
+    5. modules
+    6. intrd
+    7. vmlinux
+    8. config
+    9. system.map
     '''
     logging.info('Cleaning Host')
-    clean_list = ['hostCopy.tar.gz', commonlib.repo, 'avocado-fvt-wrapper',
-                  'avocado-korg', 'autotest_results.tar.gz', 'avocado_results.tar.gz']
-    if commonlib.repo == 'autotest':
-        clean_list.extend(['autotest-client-tests.patch', 'autotest.patch'])
-    for folder in clean_list:
+    version = obj.run_cmd('uname -r', console)
+    modules = '/lib/modules/' + version[-1]
+    clean_files = ['initrd-autotest', 'vmlinux-autotest',
+                   'config-autotest', 'System.map-autotest']
+    clean_dir = ['hostCopy.tar.gz', commonlib.repo, 'avocado-fvt-wrapper',
+                 'avocado-korg', 'autotest_results.tar.gz', 'avocado_results.tar.gz']
+    if commonlib.server == 'upstream':
+        clean_dir.extend(['autotest-client-tests.patch', 'autotest.patch'])
+    if 'autotest' in modules:
+        logging.info('Removing ' + modules)
+        obj.run_cmd('rm -rf ' + modules, console)
+    for folder in clean_dir:
         logging.info('Removing ' + folder)
         obj.run_cmd('rm -rf /root/' + folder, console)
+    for filex in clean_files:
+        logging.info('Removing ' + filex)
+        obj.run_cmd('rm -rf /boot/' + filex, console)
+    logging.info('Removing avocado tmp files')
+    obj.run_cmd('rm -rf /var/tmp/avocado*', console)
 
 
 def tar_in_host(obj, console, tag='autotest', path=commonlib.autotest_result):
@@ -56,10 +73,11 @@ def tar_in_host(obj, console, tag='autotest', path=commonlib.autotest_result):
     Tar the results in host
     '''
     logging.info('Tarring results in Host')
-    obj.run_cmd('cd %s' % path, console)
-    obj.run_cmd('tar -czf /root/%s_result.tar.gz %s --exclude=\'core\'' %
-                (tag, '*'), console, timeout=3600)
-    obj.run_cmd('cd ', console)
+    if os.path.exists(path):
+        obj.run_cmd('cd %s' % path, console)
+        obj.run_cmd('tar -czf /root/%s_result.tar.gz %s --exclude=\'core\'' %
+                    (tag, '*'), console, timeout=3600)
+        obj.run_cmd('cd ', console)
 
 
 def check_ls(obj, console, val):
@@ -79,7 +97,7 @@ def check_ls(obj, console, val):
 def handle_console(obj, console, host_details, git, tests, bso_details, sid, avtest, hmc_flag=False):
     obj.run_cmd(' uname -r', console)
     obj.run_cmd('cd', console)
-    result_dir, avocado_dir = run_function(
+    result_dir, avocado_dir, status = run_function(
         obj, console, host_details, git, tests, bso_details, sid, avtest, hmc_flag)
     if result_dir:
         dest_dir = None
@@ -87,7 +105,7 @@ def handle_console(obj, console, host_details, git, tests, bso_details, sid, avt
         if not os.path.exists(result_path):
             os.makedirs(result_path)
             dest_dir = os.path.join(
-                result_path, 'kernelOrg_' + datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
+                result_path, 'kernelOrg_' + datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_build')
             os.makedirs(dest_dir)
             # Copying autotest results
             tar_in_host(obj, console)
@@ -100,7 +118,7 @@ def handle_console(obj, console, host_details, git, tests, bso_details, sid, avt
             # Copying avocado results
             if avtest:
                 dest_av = os.path.join(
-                    result_path, 'kernelOrg_' + datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_avocado')
+                    result_path, 'kernelOrg_' + datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S') + '_test')
                 os.makedirs(dest_av)
                 tar_in_host(
                     obj, console, tag='avocado', path=commonlib.avocado_result)
@@ -111,11 +129,13 @@ def handle_console(obj, console, host_details, git, tests, bso_details, sid, avt
                 os.system('rm -rf ' + os.path.join(
                     dest_av, 'avocado_result.tar.gz'))
                 obj.run_cmd(commonlib.avocado_clean, console)
-            tear_down(obj, console)
         else:
             logging.error('Error with result generation')
-            tear_down(obj, console)
         obj.close_console(console)
+    if status:
+        if 'PASS' in status:
+            tear_down(obj, console)
+            sys.exit(11)
 
 
 def run_function(obj, console, host_details, git, tests, bso_details, sid, components, hmc_flag=False):
@@ -127,9 +147,13 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
     4. Run --continue
     5. Return path of the html generated.
     '''
+    status = None
     clone_cmd = None
-    if commonlib.repo == 'autotest':
+    if commonlib.server == 'local':
+        autotest_repo = 'http://local:server/gits/autotest'
+    else:
         autotest_repo = commonlib.autotest_repo
+    commonlib.repo = os.path.basename(autotest_repo).split('.git')[0]
     content = obj.run_cmd('git --version', console)
     if content[-1].split()[-1] < '1.8':
         git_cmd = 'git clone --recursive '
@@ -150,6 +174,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
 
     if not check_ls(obj, console, 'avocado-fvt-wrapper'):
         logging.error("\nProblem in cloning avocado repo")
+        sys.exit(1)
     obj.run_cmd('cd avocado-fvt-wrapper', console)
     obj.run_cmd(commonlib.avocado_clean, console)
     obj.run_cmd('cd /root/', console)
@@ -166,7 +191,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
         logging.error("\nProblem in cloning %s repo", commonlib.repo)
         tear_down(obj, console)
         sys.exit(1)
-    if commonlib.repo == 'autotest':
+    if commonlib.server == 'upstream':
         obj.run_cmd('cd autotest; git apply /root/autotest.patch', console)
         obj.run_cmd(
             'cd client/tests; git apply /root/autotest-client-tests.patch', console)
@@ -176,7 +201,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
     for val in content_src:
         if 'linux_src' in val:
             obj.run_cmd('rm -rf /home/linux_src/', console)
-    if git['kernel_config'] != '' and 'make' not in git['kernel_config'] :
+    if git['kernel_config'] != '' and 'make' not in git['kernel_config']:
         config_name = git['kernel_config'].rsplit('/', 1)[-1]
         git['kernel_config'] = config_name
     if git['patches'] != '':
@@ -204,7 +229,8 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
         cmd = "%s %s > %s" % (junit, result_dir, junit_result)
         if build_result == 'build':
             obj.run_cmd(cmd, console)
-            return (result_dir, None)
+            status = 'PASS'
+            return (result_dir, None, status)
         elif build_result == 'kexec':
             login_result = obj.run_login(console)
             if login_result == 'Login':
@@ -224,20 +250,20 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
             elif login_result == 'Error':
                 logging.error('Error before kexec...')
                 tear_down(obj, console)
-                sys.exit(1)
+                sys.exit(33)
             else:
                 console.expect(pexpect.TIMEOUT, timeout=30)
                 logging.error('Error before logging in..')
                 tear_down(obj, console)
-                sys.exit(1)
+                sys.exit(33)
         elif build_result == 'report':
             logging.error(' Error in kernel building')
             obj.run_cmd(cmd, console)
-            return (result_dir, None)
+            sys.exit(22)
         else:
             logging.error('Error before kexec')
             tear_down(obj, console)
-            sys.exit(1)
+            sys.exit(33)
     except pexpect.ExceptionPexpect, e:
         console.sendcontrol("c")
         console.expect(pexpect.TIMEOUT, timeout=60)
@@ -246,6 +272,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
     rc = console.expect(['Last login:', 'incorrect'], timeout=300)
     time.sleep(5)
     if rc == 0:
+        status = 'PASS'
         console.sendline('PS1=[pexpect]#')
         if hmc_flag:
             console.send('\r')
@@ -281,13 +308,17 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
             obj.run_cmd(
                 'rm -rf /root/avocado-korg/*', console)
             obj.run_cmd('cd avocado-fvt-wrapper', console)
+            # This is needed for rcu torture tests, which looks for config of
+            # the linux booted
+            obj.run_cmd(
+                'yes | cp -rf /boot/config-autotest /boot/config-$(uname -r)', console)
 
             # TODO: parallel_run for each_component
             for component in components.split(','):
                 obj.run_cmd('mkdir -p /root/avocado-korg/' +
                             component, console)
                 obj.run_cmd(commonlib.avocado_test_run % (
-                    component, component), console, timeout=1000)
+                    component, component), console, timeout=commonlib.test_timeout)
         else:
             logging.info("No avocado opeartion")
 
@@ -296,8 +327,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
         tear_down(obj, console)
         sys.exit(1)
 
-    if result_path:
-        return (result_path, commonlib.avocado_result)
+    return (result_path, commonlib.avocado_result, status)
 
 
 def check_ipmi_details(details):
@@ -343,7 +373,7 @@ def main():
     parser.add_argument("--host", action="store", dest="host", help="Specify the machine ip, linux username and linux password\
                         Usage: --host 'hostname=hostname,username=username,password=password'")
     parser.add_argument("--args", action="store", dest="args",
-                        help="Specify the kernel git tree and kernel git branch Usage: --args 'host_kernel_git=git_link,host_kernel_branch=branch,kernel_config=configfile,patches=patchfile'")
+                        help="Specify the kernel git tree and kernel git branch Usage: --args 'host_kernel_git=git_link,host_kernel_branch=branch'")
     parser.add_argument("--tests", action="store", dest="tests", help="Specify the tests to perform\
                         Usage: --tests 'test_name1,test_name2,test_name3'")
     parser.add_argument("--list", action="store", dest="list", help="lists the tests available to run\
@@ -356,6 +386,12 @@ def main():
                         Usage: --id sid")
     parser.add_argument("--avtest", action="store", dest="avtest", help="[Optional] Specify the tests to perform in avocado\
                         Usage: --tests cpu,generic,io")
+    parser.add_argument("--commit", action="store", dest="commit", help="Specify good and bad commit\
+                        Usage: --commit 'good=0c823741,bad=12046341'")
+    parser.add_argument("--bisect", action="store", dest="bisect", help="Specify build or boot bisect\
+                        Usage: --bisect build or --bisect boot")
+    parser.add_argument("--inputfile", action="store", dest="inputfile", help="Specify the path to input file for avocado tests\
+                        Usage: --input '/root/nvme_input")
 
     options = parser.parse_args()
     machine_type = None
@@ -364,6 +400,11 @@ def main():
     tests = None
     disk = None
     sid = None
+    json_path = None
+    inputfile = None
+    bflag = False
+    boot = True
+    bisect = None
     logging.basicConfig(
         format='\n%(asctime)s %(levelname)s  |  %(message)s', level=logging.DEBUG, datefmt='%I:%M:%S %p')
 
@@ -439,7 +480,30 @@ def main():
 
     if options.id:
         sid = options.id
+        json_path = "%s%s/%s.json" % (
+            commonlib.base_path, options.id, options.id)
+        git['kernel_config'] = git['kernel_config'].rsplit('/', 1)[-1]
 
+    if options.bisect:
+        bisect = options.bisect
+        bflag = True
+        if options.commit:
+            commit = commonlib.get_keyvalue(options.commit)
+            goodcommit = commit['good']
+            badcommit = commit['bad']
+        else:
+            json_data = commonlib.read_json(json_path)
+            goodcommit = json_data['GOOD']
+            badcommit = json_data['BAD']
+        if 'build' in bisect:
+            boot = False
+
+    if options.inputfile:
+        inputfile = options.inputfile
+        commonlib.avocado_test_run = commonlib.avocado_test_run + \
+            ' --input ' + '/root/' + inputfile.rsplit('/')[-1]
+    if not options.bisect:
+        commonlib.setup_linux_tar(git, sid)
     if machine_type == 'Power KVM/NV':
         # 1. Get ipmi console
         # 2. run function with IPMI object,console
@@ -456,26 +520,36 @@ def main():
                     details['username'] = ''
                 ipmi_reb = ipmi.ipmi(
                     details['ip'], details['username'], details['password'])
-                logging.info("REBOOTING THE MACHINE")
-                ipmi_reb.handle_reboot(disk, host_details)
-                logging.info("REBOOT COMPLETE")
-                time.sleep(10)
+                if boot:
+                    logging.info("REBOOTING THE MACHINE")
+                    ipmi_reb.handle_reboot(disk, host_details)
+                    logging.info("REBOOT COMPLETE")
+                    time.sleep(10)
                 if options.id:
-                        scplib.scp_id(options.id, host_details)
+                    scplib.scp_id(options.id, host_details)
                 else:
-                        scplib.scp_manual(git['kernel_config'], git['patches'], host_details)
+                    scplib.scp_manual(
+                        git['kernel_config'], git['patches'], host_details)
                 logging.info('Copying git patches')
-                if commonlib.repo == 'autotest':
+                if commonlib.server == 'upstream':
                     commonlib.scp_to_host('' + os.path.join(file_path, 'patches/autotest.patch') + ' ' + os.path.join(
                         file_path, 'patches/autotest-client-tests.patch'), host_details)
+                if options.inputfile:
+                    logging.info('Copying inputfile')
+                    commonlib.scp_to_host(inputfile, host_details)
                 logging.info("SCP COMPLETE")
                 ipmi_obj = ipmi.ipmi(
                     details['ip'], details['username'], details['password'])
                 con = ipmi_obj.getconsole()
                 ipmi_obj.set_unique_prompt(
                     con, host_details['username'], host_details['password'])
-                handle_console(
-                    ipmi_obj, con, host_details, git, tests, bso_details, sid, options.avtest)
+                if not bflag:
+                    handle_console(
+                        ipmi_obj, con, host_details, git, tests, bso_details, sid, options.avtest)
+                else:
+                    # if 'build' in options.bisect: # ToDo for boot bisect
+                    commonlib.bisect(
+                        ipmi_obj, con, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, None)
             else:
                 logging.error('Specify necessary details of IPMI')
     elif machine_type == 'Power VM':
@@ -492,21 +566,26 @@ def main():
         reboot_obj = hmc.hmc(
             details['ip'], details['username'], details['password'])
         reboot_obj.login()
-        logging.info(" REBOOTING MACHINE")
-        reb_result = reboot_obj.handle_reboot(
-            disk, details['server'], details['lpar'])
-        if reb_result == "Login":
-            logging.info("SYSTEM REBOOTED")
-        time.sleep(20)
+        if boot:
+            logging.info(" REBOOTING MACHINE")
+            reb_result = reboot_obj.handle_reboot(
+                disk, details['server'], details['lpar'])
+            if reb_result == "Login":
+                logging.info("SYSTEM REBOOTED")
+            time.sleep(20)
 
         if options.id:
             scplib.scp_id(options.id, host_details)
         else:
-            scplib.scp_manual(git['kernel_config'], git['patches'], host_details)
+            scplib.scp_manual(
+                git['kernel_config'], git['patches'], host_details)
         logging.info('Copying git patches')
-        if commonlib.repo == 'autotest':
+        if commonlib.server == 'upstream':
             commonlib.scp_to_host('' + os.path.join(file_path, 'patches/autotest.patch') + ' ' + os.path.join(
                 file_path, 'patches/autotest-client-tests.patch'), host_details)
+        if options.inputfile:
+            logging.info('Copying inputfile')
+            commonlib.scp_to_host(inputfile, host_details)
         logging.info("SCP COMPLETE")
 
         logging.info("Passing BSO for %s", host_details['hostname'])
@@ -524,8 +603,12 @@ def main():
                 console = mk.get_lpar_console(details['username'], details['password'], details[
                                               'server'], details['lpar'], host_details['username'], host_details['password'])
                 mk.set_unique_prompt(console)
-                handle_console(mk, console, host_details, git,
-                               tests, bso_details, sid, options.avtest, hmc_flag=True)
+                if not bflag:
+                    handle_console(mk, console, host_details, git,
+                                   tests, bso_details, sid, options.avtest, hmc_flag=True)
+                else:
+                    commonlib.bisect(
+                        mk, console, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, details, hmc_flag=True)
             else:
                 logging.error('Specify necessary HMC details')
 

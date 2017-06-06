@@ -12,46 +12,77 @@
 # See LICENSE for more details.
 #
 # Copyright: 2017 IBM
-# Author: Harish <harish@linux.vnet.ibm.com>
+# Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
 
-import urllib
-import datetime
-from bs4 import BeautifulSoup
 import argparse
+import re
+import os
+
+SID = ''
+FILE_PATH = ''
+FOUND = []
+PATH = '/home/jenkins/jobs'
+REPORT = '/root/report/status.log'
+TRACES = ["Kernel panic", "Aieee", "soft lockup",
+          "not syncing", "Oops", "Bad trap at PC",
+          "Unable to handle kernel NULL pointer",
+          "Unable to mount root device", "grub>",
+          "grub rescue", "\(initramfs\)", "unhandled signal",
+          "WARNING: CPU:", "Call Trace:", "BUG: unable to handle kernel NULL",
+          "detected stalls on CPUs/tasks:", "detected stall on CPU",
+          "NMI backtrace for cpu", "NMI watchdog: BUG: soft lockup - CPU",
+          "unhandled signal", "Machine Check Exception", "WARNING: at", "Not tainted"
+          "Unhandled CmdError: Command <make -j", "error:", "Backtrace:",
+          "double linked list corrupted", "metadata I/O error", "Metadata corruption detected"
+          "Segmentation fault", "Oops: Kernel access of bad area"]
+
+
+def parse(path, trace):
+    global SID, FILE_PATH
+    for dir_path, dirs, file_names in os.walk(path):
+        for file_name in file_names:
+            path = os.path.join(dir_path, file_name)
+            for line in file(path):
+                if 'sid=' in line:
+                    SID = line.strip('\n')
+                if trace in line:
+                    FILE_PATH = path
+                    line = re.sub(r'.*]', ']', line)
+                    return line.strip('\n')[1:]
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--link", action="store", dest="link", help="Specify the link of the HTML to be parsed\
-                        Usage: --link results/job_report.html (autotest result)")
-    parser.add_argument("--file", action="store", dest="files", help="Specify HTML File to be parsed\
-                        Usage: --file /home/usrContent/job_report.html")
-    parser.add_argument("--table", action="store", dest="table", help="Specify the table to be parsed in HTML\
-                        Usage: --table t1")
-
+    parser.add_argument("--build", action="store", dest="build", help="Specify the build number of this job\
+                        Usage: --build 154")
+    parser.add_argument("--project", action="store", dest="project", help="Specify the project of this build\
+                        Usage: --project K-Bot")
     options = parser.parse_args()
-    if options.link:
-        f = urllib.urlopen(options.link)
-    elif options.files:
-        f = open(options.files,'r')
-
-    myfile = f.read()
-    soup = BeautifulSoup(myfile, 'html.parser')
-    s = soup.find(id=options.table)
-    rows = s.find_all('tr')
-    pas = 0
-    fail =0
-    n = len(rows) - 1
-    for row in rows:
-        cells = row.find_all("td")
-        for cell in cells:
-            cell = cell.find_all("div")
-            if len(cell) ==1:
-                if cell[0].get_text() == "GOOD":
-                    pas = pas + 1
-    pas_val = (pas * 100)/n
-    final_string = str(pas_val) + '__100'
-    print final_string
-    return final_string
-
+    if options.build:
+        BUILD_NUMBER = options.build
+    if options.project:
+        JOB_NAME = options.project
+    job_logs = "%s/%s/builds/%s/" % (PATH, JOB_NAME, BUILD_NUMBER)
+    parse_log = os.path.join(job_logs + 'parse.log')
+    with open(parse_log, 'a') as fd, open(REPORT, 'a') as fin:
+        fd.write("\n # Result Analysis: " + ' JOB_ID:' + BUILD_NUMBER + ' #\n')
+        fd.write("\n")
+        fin.write('\n # START  :BUILD NUMBER :' + BUILD_NUMBER + ' #\n')
+        fin.write("\n")
+        for trace in TRACES:
+            if trace not in FOUND:
+                line = parse(job_logs, trace)
+                if line and line != '\r':
+                    fd.write(line + '\n Found in :' + FILE_PATH + '\n')
+                    fd.write('\n')
+                    fin.write(line + '\n Found in :' + FILE_PATH + '\n')
+                    fin.write('\n')
+        fin.write(
+            '# END ' + SID + ' : BUILD NUMBER : ' + BUILD_NUMBER + ' #\n')
+        fin.write(
+            '-------------------------------------------------------------\n')
+        fd.write(' # end ' + SID + ' #\n')
+        fd.close()
+        fin.close()
 if __name__ == "__main__":
     main()

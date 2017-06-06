@@ -12,8 +12,9 @@
 # See LICENSE for more details.
 #
 # Copyright: 2017 IBM
-# Author: Harish <harish@linux.vnet.ibm.com>
-#         Abdul Haleem <abdhalee@linux.vnet.ibm.com>
+# Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
+#       : Harish <harish@linux.vnet.ibm.com>
+# Based on the code written by Prudhvi Piapaddy
 
 import time
 import sys
@@ -32,7 +33,7 @@ class ipmi:
             self.user_name = " -U %s " % user_name
         self.password = password
 
-    def run_cmd(self, cmd, console, timeout=300):
+    def run_cmd(self, cmd, console, timeout=3000):
         time.sleep(2)
         console.sendline(cmd)
         time.sleep(5)
@@ -55,7 +56,7 @@ class ipmi:
 
     def bso_auth(self, console, username, password):
         time.sleep(2)
-        console.sendline('telnet github.com')
+        console.sendline('telnet 9.x.x.x.x')
         time.sleep(5)
         try:
             rc = console.expect(["Username:", "refused", "login:"], timeout=60)
@@ -88,11 +89,13 @@ class ipmi:
 
     def check_kernel_panic(self, console):
         list = [
-            "Kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC",
+            "WARNING: CPU:", "kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC", "error:",
             "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)", pexpect.TIMEOUT]
         try:
-            rc = console.expect(list, timeout=120)
-            if rc in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+            print "check_kernel_panic"
+            rc = console.expect(list, timeout=200)
+            print rc
+            if rc in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]:
                 print "system got " + list[rc] + ", exiting"
                 return "panic"
             else:
@@ -247,7 +250,8 @@ class ipmi:
             rc = console.expect(
                 ["\[.+\#", "petitboot", "login:", "(initramfs)"], timeout=400)
             if rc == 0:
-                rc_in = console.expect(["login:", pexpect.TIMEOUT], timeout=120)
+                rc_in = console.expect(
+                    ["login:", pexpect.TIMEOUT], timeout=120)
                 if rc_in == 0:
                     return "login"
                 elif rc_in == 1:
@@ -333,7 +337,7 @@ class ipmi:
         elif console_type == 'login':
             logging.info("Logging into system")
             self.login(console, host_details[
-                           'username'], host_details['password'])
+                       'username'], host_details['password'])
         elif console_type == 'logged' or console_type == 'petitboot':
             # Find the partition of installation on top of the disk
             logging.info("System Logged in/Petitboot state")
@@ -377,7 +381,6 @@ class ipmi:
         if rc_reb == 0:
             logging.info("Reboot successful.")
         self.close_console(console)
-
 
     def close_console(self, console):
         console.send('~.')

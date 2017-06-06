@@ -20,7 +20,8 @@ import datetime
 import re
 import argparse
 import json
-sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+sys.path.append(
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 from lib import common_lib as commonlib
 
 
@@ -59,6 +60,8 @@ def create_sidfile(json_details, sid_file):
     file_pathc = json_details['configfile'].replace(config_name, '')
     patch_name = json_details['patchfile'].rsplit('/', 1)[-1]
     file_pathp = json_details['patchfile'].replace(patch_name, '')
+    input_name = json_details['inputfile'].rsplit('/', 1)[-1]
+    file_pathi = json_details['inputfile'].replace(input_name, '')
 
     os.makedirs(commonlib.base_path + sid_file + '/')
     # with sid_file = open(base_path + json_details['sid'] +'.json', 'w') load
@@ -72,11 +75,16 @@ def create_sidfile(json_details, sid_file):
     else:
         sid_json['CONFIG'] = ''
     if os.path.exists(json_details['patchfile']):
-        os.system('mv ' +  json_details['patchfile'] + ' ' +
+        os.system('mv ' + json_details['patchfile'] + ' ' +
                   commonlib.base_path + sid_file + '/' + patch_name)
         sid_json['PATCH'] = commonlib.base_path + sid_file + '/' + patch_name
     else:
         sid_json['PATCH'] = ''
+    if os.path.exists(json_details['inputfile']):
+        os.system('mv ' + json_details['inputfile'] + ' ' +
+                  commonlib.base_path + sid_file + '/' + input_name)
+        sid_json['INPUTFILE'] = "%s%s/%s" % (
+            commonlib.base_path, sid_file, input_name)
     commonlib.update_json(
         commonlib.base_path + sid_file + '/' + sid_file + '.json', sid_json)
 
@@ -93,6 +101,8 @@ def main():
                         Usage: --host host-ip")
     parser.add_argument("--bootdisk", action="store", dest="bdisk", help="Specify the boot disk of the host to run\
                         Usage: --disk disk")
+    parser.add_argument("--inputfile", action="store", dest="inputfile", help="Specify the input file for avocado run\
+                        Usage: --inputfile /root/inputfile")
 
     options = parser.parse_args()
     time = datetime.datetime.now().strftime('%Y_%m_%d')
@@ -110,11 +120,14 @@ def main():
         json_details['avtest'] = options.avtest
     else:
         json_details['avtest'] = None
-
     if options.bm:
         json_details['buildmachine'] = options.bm
     if options.bdisk:
         json_details['bootdisk'] = options.bdisk
+    if options.inputfile:
+        json_details['inputfile'] = options.inputfile
+    else:
+        json_details['inputfile'] = None
 
     subscribers_json = {}
     subscribers_json['SID'] = get_subid(
@@ -128,7 +141,8 @@ def main():
     subscribers_json['TESTS'] = json_details['tests']
     subscribers_json['AVTEST'] = json_details['avtest']
 
-    commonlib.append_json(commonlib.base_path + '/subscribers.json', subscribers_json)
+    commonlib.append_json(
+        commonlib.base_path + '/subscribers.json', subscribers_json)
 
     create_sidfile(json_details, subscribers_json['SID'])
     print subscribers_json['SID']
