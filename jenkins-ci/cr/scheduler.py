@@ -57,6 +57,8 @@ def cifile_read(machine=''):
                 Testmachine = val
                 write_jenkinsfile(Testmachine)
             testline = 1
+        if len(value[0].split(',')) == 9:
+            print key[i]+'=None'
 
 
 datafile = open(jenkinsrun_file)
