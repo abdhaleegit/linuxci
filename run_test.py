@@ -11,9 +11,9 @@
 #
 # See LICENSE for more details.
 #
-# Copyright: 2017 IBM
+# Copyright: 2016 IBM
 # Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
-#       : Harish <harish@linux.vnet.ibm.com>
+#       : Harish <harisrir@linux.vnet.ibm.com>
 
 import os
 import time
@@ -23,9 +23,9 @@ import re
 import datetime
 import logging
 import pexpect
+from lib import ssh
 from lib import ipmi
 from lib import hmc
-from lib import bso_authenticator
 from lib import common_lib as commonlib
 from lib import scp_to_host as scplib
 
@@ -58,6 +58,8 @@ def tear_down(obj, console):
     if 'autotest' in modules:
         logging.info('Removing ' + modules)
         obj.run_cmd('rm -rf ' + modules, console)
+    cmd = 'cd /root/avocado-fvt-wrapper;%s;cd' % commonlib.avocado_clean
+    obj.run_cmd(cmd, console)
     for folder in clean_dir:
         logging.info('Removing ' + folder)
         obj.run_cmd('rm -rf /root/' + folder, console)
@@ -66,6 +68,16 @@ def tear_down(obj, console):
         obj.run_cmd('rm -rf /boot/' + filex, console)
     logging.info('Removing avocado tmp files')
     obj.run_cmd('rm -rf /var/tmp/avocado*', console)
+    console.close()
+
+
+def get_ssh_console(hostname, username, password):
+    '''
+    get ssh console and obj for command run
+    '''
+    obj = ssh.ssh(hostname, username, password)
+    console = obj.login()
+    return (obj, console)
 
 
 def tar_in_host(obj, console, tag='autotest', path=commonlib.autotest_result):
@@ -73,11 +85,10 @@ def tar_in_host(obj, console, tag='autotest', path=commonlib.autotest_result):
     Tar the results in host
     '''
     logging.info('Tarring results in Host')
-    if os.path.exists(path):
-        obj.run_cmd('cd %s' % path, console)
-        obj.run_cmd('tar -czf /root/%s_result.tar.gz %s --exclude=\'core\'' %
-                    (tag, '*'), console, timeout=3600)
-        obj.run_cmd('cd ', console)
+    obj.run_cmd('cd %s' % path, console)
+    obj.run_cmd('tar -czf /root/%s_result.tar.gz --exclude=\'core\' %s' %
+                (tag, '*'), console, timeout=3600)
+    obj.run_cmd('cd ', console)
 
 
 def check_ls(obj, console, val):
@@ -94,14 +105,16 @@ def check_ls(obj, console, val):
     return flag
 
 
-def handle_console(obj, console, host_details, git, tests, bso_details, sid, avtest, hmc_flag=False):
+def handle_console(obj, console, host_details, git, tests, bso_details, sid, avtest, use_ssh, hmc_flag=False):
     obj.run_cmd(' uname -r', console)
     obj.run_cmd('cd', console)
     result_dir, avocado_dir, status = run_function(
-        obj, console, host_details, git, tests, bso_details, sid, avtest, hmc_flag)
+        obj, console, host_details, git, tests, bso_details, sid, avtest, use_ssh, hmc_flag)
     if result_dir:
         dest_dir = None
         result_path = os.path.join(file_path, 'results')
+        if use_ssh:
+            obj, console = get_ssh_console(host_details['hostname'], host_details['username'], host_details['password'])
         if not os.path.exists(result_path):
             os.makedirs(result_path)
             dest_dir = os.path.join(
@@ -128,17 +141,15 @@ def handle_console(obj, console, host_details, git, tests, bso_details, sid, avt
                     os.path.join(dest_av, 'avocado_result.tar.gz'), dest=dest_av)
                 os.system('rm -rf ' + os.path.join(
                     dest_av, 'avocado_result.tar.gz'))
-                obj.run_cmd(commonlib.avocado_clean, console)
         else:
             logging.error('Error with result generation')
-        obj.close_console(console)
     if status:
         if 'PASS' in status:
             tear_down(obj, console)
             sys.exit(11)
 
 
-def run_function(obj, console, host_details, git, tests, bso_details, sid, components, hmc_flag=False):
+def run_function(obj, console, host_details, git, tests, bso_details, sid, components, use_ssh, hmc_flag=False):
     '''
     In PowerKVM or Power NV, Check for bso auth
     1. Clone the git.
@@ -149,12 +160,20 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
     '''
     status = None
     clone_cmd = None
+    gitserver = ['github.com']
     if commonlib.server == 'local':
-        autotest_repo = 'http://local:server/gits/autotest'
+        autotest_repo = 'git@github.ibm.com:abdhalee/autotest.git'
     else:
         autotest_repo = commonlib.autotest_repo
     commonlib.repo = os.path.basename(autotest_repo).split('.git')[0]
     content = obj.run_cmd('git --version', console)
+    if 'ibm' in autotest_repo or commonlib.avocado_repo:
+        gitserver.extend(['github.ibm.com'])
+    for gits in gitserver:
+        keyremove = 'ssh-keygen -R %s' % gits
+        obj.run_cmd(keyremove, console)
+        keyadd = 'ssh-keyscan %s >> ~/.ssh/known_hosts' % gits
+        obj.run_cmd(keyadd, console)
     if content[-1].split()[-1] < '1.8':
         git_cmd = 'git clone --recursive '
     else:
@@ -163,7 +182,7 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
     avocado_repo = git_cmd + commonlib.avocado_repo + ' > /dev/null 2>&1'
 
     commonlib.install_packages(obj, console)
-    obj.bso_auth(console, bso_details['username'], bso_details['password'])
+    #obj.bso_auth(console, bso_details['username'], bso_details['password'])
     result_path = None
     obj.run_cmd('uname -r', console)
     obj.run_cmd('cd', console)
@@ -317,8 +336,16 @@ def run_function(obj, console, host_details, git, tests, bso_details, sid, compo
             for component in components.split(','):
                 obj.run_cmd('mkdir -p /root/avocado-korg/' +
                             component, console)
-                obj.run_cmd(commonlib.avocado_test_run % (
-                    component, component), console, timeout=commonlib.test_timeout)
+                if use_ssh:
+                    obj.close_console(console)
+                    obj, console = get_ssh_console(host_details['hostname'], host_details['username'], host_details['password'])
+                    cmd = 'cd avocado-fvt-wrapper;%s' % commonlib.avocado_test_run % (component, component)
+                    obj.run_cmd(cmd, console)
+                    console.close()
+                    result_path = True
+                else:
+                    obj.run_cmd(commonlib.avocado_test_run % (
+                        component, component), console, timeout=commonlib.test_timeout)
         else:
             logging.info("No avocado opeartion")
 
@@ -350,11 +377,11 @@ def check_host_details(details):
 
 def scp_from_host(host_details, dest_dir, src_dir='/root', files='*'):
     logging.info("SCPing the files")
-    logging.info('scp -l 8192 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' + host_details[
+    logging.info('scp -l 8192 -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' + host_details[
                  'username'] + '@' + host_details['hostname'] + ':' + src_dir + '/' + files + ' ' + dest_dir + '/')
-    scp = pexpect.spawn('scp -l 8192 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' + host_details['username'] + '@' + host_details[
+    scp = pexpect.spawn('scp -l 8192 -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' + host_details['username'] + '@' + host_details[
                         'hostname'] + ':' + src_dir + '/' + files + ' ' + dest_dir + '/')
-    res = scp.expect([r'[Pp]assword:', pexpect.EOF])
+    res = scp.expect([r'[Pp]assword:', pexpect.EOF], timeout=120)
     if res == 0:
         scp.sendline(host_details['password'])
         logging.info("Copying the results")
@@ -391,7 +418,9 @@ def main():
     parser.add_argument("--bisect", action="store", dest="bisect", help="Specify build or boot bisect\
                         Usage: --bisect build or --bisect boot")
     parser.add_argument("--inputfile", action="store", dest="inputfile", help="Specify the path to input file for avocado tests\
-                        Usage: --input '/root/nvme_input")
+                        Usage: --inputfile '/root/nvme_input")
+    parser.add_argument("--use-ssh", action="store_true", dest="ssh", help=" use ssh console to run tests\
+                        Usage: --use-ssh")
 
     options = parser.parse_args()
     machine_type = None
@@ -403,6 +432,7 @@ def main():
     json_path = None
     inputfile = None
     bflag = False
+    use_ssh = False
     boot = True
     bisect = None
     logging.basicConfig(
@@ -424,11 +454,6 @@ def main():
             tests.close()
             sys.exit(0)
 
-    if options.avtest:
-        print "ERROR:  No avocado support!!!"
-        print "\nUsage: python run_test.py --list autotest\n"
-        sys.exit(0)
-
     if options.host:
         logging.info('%s', options.host)
         host_details = commonlib.get_keyvalue(options.host)
@@ -449,9 +474,7 @@ def main():
         sys.exit(1)
     elif options.ipmi:
         machine_type = 'Power KVM/NV'
-        logging.info('Passing BSO for %s', host_details['hostname'])
-        bso_authenticator.pass_bso(host_details['hostname'], user=bso_details[
-                                   'username'], password=bso_details['password'])
+
     elif options.hmc:
         machine_type = 'Power VM'
     else:
@@ -484,6 +507,9 @@ def main():
             commonlib.base_path, options.id, options.id)
         git['kernel_config'] = git['kernel_config'].rsplit('/', 1)[-1]
 
+    if options.ssh:
+        use_ssh = True
+
     if options.bisect:
         bisect = options.bisect
         bflag = True
@@ -501,7 +527,7 @@ def main():
     if options.inputfile:
         inputfile = options.inputfile
         commonlib.avocado_test_run = commonlib.avocado_test_run + \
-            ' --input ' + '/root/' + inputfile.rsplit('/')[-1]
+            ' --input-file ' + '/root/' + inputfile.rsplit('/')[-1]
     if not options.bisect:
         commonlib.setup_linux_tar(git, sid)
     if machine_type == 'Power KVM/NV':
@@ -545,11 +571,11 @@ def main():
                     con, host_details['username'], host_details['password'])
                 if not bflag:
                     handle_console(
-                        ipmi_obj, con, host_details, git, tests, bso_details, sid, options.avtest)
+                        ipmi_obj, con, host_details, git, tests, bso_details, sid, options.avtest, use_ssh)
                 else:
                     # if 'build' in options.bisect: # ToDo for boot bisect
                     commonlib.bisect(
-                        ipmi_obj, con, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, None)
+                        ipmi_obj, con, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, use_ssh, None)
             else:
                 logging.error('Specify necessary details of IPMI')
     elif machine_type == 'Power VM':
@@ -588,10 +614,6 @@ def main():
             commonlib.scp_to_host(inputfile, host_details)
         logging.info("SCP COMPLETE")
 
-        logging.info("Passing BSO for %s", host_details['hostname'])
-        bso_authenticator.pass_bso(host_details['hostname'], user=bso_details[
-                                   'username'], password=bso_details['password'])
-
         mk = hmc.hmc(details['ip'], details['username'], details['password'])
         is_up = os.system('ping -c 1 ' + details['ip'])
         if not is_up == 0:
@@ -605,10 +627,10 @@ def main():
                 mk.set_unique_prompt(console)
                 if not bflag:
                     handle_console(mk, console, host_details, git,
-                                   tests, bso_details, sid, options.avtest, hmc_flag=True)
+                                   tests, bso_details, sid, options.avtest, use_ssh, hmc_flag=True)
                 else:
                     commonlib.bisect(
-                        mk, console, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, details, hmc_flag=True)
+                        mk, console, host_details, git, json_path, goodcommit, badcommit, options.bisect, disk, details, use_ssh,  hmc_flag=True)
             else:
                 logging.error('Specify necessary HMC details')
 
