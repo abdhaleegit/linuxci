@@ -46,9 +46,10 @@ hostcopy_path = config_details.get('Details', 'hostcopy_path')
 subscribersfile = config_details.get('Details', 'subscribersfile')
 scp_timeout = int(config_details.get('Details', 'scp_timeout'))
 test_timeout = int(config_details.get('Details', 'test_timeout'))
+server = config_details.get('Details', 'server')
 
 # basic required pkgs, without this the run fails
-BASEPKG = ['git', 'telnet', 'rpm', 'python']
+BASEPKG = ['git', 'telnet', 'rpm', 'python', 'flex', 'bison']
 
 
 def get_output(cmd):
@@ -177,7 +178,7 @@ def read_json(path):
 
 
 def scp_to_host(file_path, host_details):
-    scp = pexpect.spawn('scp -l 8192 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' +
+    scp = pexpect.spawn('scp -l 8192 -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ' +
                         file_path + ' ' + host_details['username'] + '@' + host_details['hostname'] + ':/root/')
     res = scp.expect([r'[Pp]assword:', pexpect.EOF])
     if res == 0:
