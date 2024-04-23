@@ -56,7 +56,7 @@ class ipmi:
 
     def bso_auth(self, console, username, password):
         time.sleep(2)
-        console.sendline('telnet 9.x.x.x.x')
+        console.sendline('telnet github.com')
         time.sleep(5)
         try:
             rc = console.expect(["Username:", "refused", "login:"], timeout=60)
@@ -89,8 +89,10 @@ class ipmi:
 
     def check_kernel_panic(self, console):
         list = [
-            "WARNING: CPU:", "kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC", "error:",
-            "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)", pexpect.TIMEOUT]
+            "WARNING: CPU:", "kernel panic - not syncing:", "Aieee", "soft lockup", "Oops", "Bad trap at PC",
+            "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)",
+            "Segfault", "Unable to handle paging request", "rcu_sched detected stalls", "NMI backtrace for cpu", "'Call Trace:",
+            "WARNING: at", "INFO: possible recursive locking detected", "Kernel BUG at", "double fault:",  pexpect.TIMEOUT]
         try:
             print "check_kernel_panic"
             rc = console.expect(list, timeout=200)
@@ -148,7 +150,7 @@ class ipmi:
     def activate(self):
         print "running:ipmitool -I lanplus %s -P %s  -H %s sol activate" % (self.user_name, self.password, self.host_name)
         con = pexpect.spawn('ipmitool -I lanplus %s -P %s -H %s sol activate' %
-                            (self.user_name, self.password, self.host_name), timeout=60)
+                            (self.user_name, self.password, self.host_name), timeout=300)
         return con
 
     def deactivate(self):
@@ -222,7 +224,7 @@ class ipmi:
                 else:
                     sys.exit(1)
             else:
-                console.expect(pexpect.TIMEOUT, timeout=30)
+                console.expect(pexpect.TIMEOUT, timeout=60)
                 print console.before
         except pexpect.ExceptionPexpect, e:
             console.sendcontrol("c")
@@ -238,7 +240,7 @@ class ipmi:
 
     def get_type(self, console):
         rc = console.expect_exact(
-            "[SOL Session operational.  Use ~? for help]\r\n", timeout=300)
+            "[SOL Session operational.  Use ~? for help]\r\n", timeout=600)
         if rc == 0:
             print "Got ipmi console : First run"
         else:
@@ -248,7 +250,7 @@ class ipmi:
         time.sleep(3)
         try:
             rc = console.expect(
-                ["\[.+\#", "petitboot", "login:", "(initramfs)"], timeout=400)
+                ["\[.+\#", "petitboot", "login:", "(initramfs)"], timeout=1400)
             if rc == 0:
                 rc_in = console.expect(
                     ["login:", pexpect.TIMEOUT], timeout=120)
@@ -277,7 +279,7 @@ class ipmi:
         if rc == 0:
             console.sendline(password)
             rc_l = console.expect(
-                ["Last login:", "incorrect", pexpect.TIMEOUT], timeout=300)
+                ["Last login:", "incorrect", pexpect.TIMEOUT], timeout=600)
             if rc_l == 1:
                 print "Error in logging.Wrong Credentials"
                 sys.exit(1)
