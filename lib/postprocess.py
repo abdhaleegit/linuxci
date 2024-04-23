@@ -47,24 +47,27 @@ def main():
             commonlib.base_path, options.id, options.id)
         logging.info("UPDATING DATAFILE OF SUBSCRIPTION")
         old_json = commonlib.read_json(json_path)
-        old_json['LASTRUN'] = datetime.datetime.now().strftime('%Y_%m_%d')
         if 'PASS' in options.result:
             old_json['GOOD'] = old_json['HEAD']
         if 'FAIL' in options.result:
             old_json['BAD'] = old_json['HEAD']
+        if 'day' not in old_json['BUILDFREQ']:
+            old_json['LASTRUN'] = datetime.datetime.now().strftime('%Y_%m_%d')
+            commonlib.update_json(json_path, old_json)
+            nextrun = datetime.datetime.strptime(old_json['NEXTRUN'], '%Y_%m_%d')
+            lastrun = datetime.datetime.strptime(old_json['LASTRUN'], '%Y_%m_%d')
 
-        commonlib.update_json(json_path, old_json)
-        nextrun = datetime.datetime.strptime(old_json['NEXTRUN'], '%Y_%m_%d')
-        lastrun = datetime.datetime.strptime(old_json['LASTRUN'], '%Y_%m_%d')
+            logging.info("\n Run Completed on %s", old_json['LASTRUN'])
+            if nextrun <= lastrun:
+                if old_json['BUILDFREQ'] == 'daily':
+                    old_json['NEXTRUN'] = commonlib.oneday(old_json['LASTRUN'])
+                if old_json['BUILDFREQ'] == 'weekly':
+                    old_json['NEXTRUN'] = commonlib.oneweek(old_json['LASTRUN'])
+                if old_json['BUILDFREQ'] == 'monthly':
+                    old_json['NEXTRUN'] = commonlib.onemonth(lastrun)
+        else:
+            old_json['LASTRUN'] = old_json['NEXTRUN'] = old_json['BUILDFREQ']
 
-        logging.info("\n Run Completed on %s", old_json['LASTRUN'])
-        if nextrun <= lastrun:
-            if old_json['BUILDFREQ'] == 'daily':
-                old_json['NEXTRUN'] = commonlib.oneday(old_json['LASTRUN'])
-            if old_json['BUILDFREQ'] == 'weekly':
-                old_json['NEXTRUN'] = commonlib.oneweek(old_json['LASTRUN'])
-            if old_json['BUILDFREQ'] == 'monthly':
-                old_json['NEXTRUN'] = commonlib.onemonth(lastrun)
         cmd = "git ls-remote %s %s | head -n1 | awk '{print $1;}'" % (
             old_json['URL'], old_json['BRANCH'])
         old_json['COMMITID'] = commonlib.get_output(cmd).strip('\n')
