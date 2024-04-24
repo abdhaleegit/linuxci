@@ -202,12 +202,7 @@ def main():
                 if BUILDFREQ == TODAY or NEXTRUN == TODAY :
                     add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                     if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
-<<<<<<< HEAD
-                        print SID + " Job added to Queue succesfully !"
-
-=======
                         print (SID + " Job added to Queue succesfully !")
->>>>>>> 2330bf3 (Porting the jenkins-ci code from Python2 to Python3)
             else:
                 if LASTRUN is None:
                     if BUILDFREQ == 'daily':
@@ -217,17 +212,10 @@ def main():
                     if BUILDFREQ == 'monthly':
                         json_data['NEXTRUN'] = commonlib.onemonth(date_obj)
                     update_datafile(SID, json_data)
-<<<<<<< HEAD
-                    print "always a candidate for Q"
-                    add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
-                    if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
-                        print SID + " Job added to Queue succesfully !"
-=======
                     print ("always a candidate for Q")
                     add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                     if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
                         print (SID + " Job added to Queue succesfully !")
->>>>>>> 2330bf3 (Porting the jenkins-ci code from Python2 to Python3)
                 else:
                     lastrun = datetime.datetime.strptime(LASTRUN, '%Y_%m_%d')
                     if NEXTRUN is not None:
@@ -236,17 +224,10 @@ def main():
                         json_data['LASTRUN'] = date_str
                         update_datafile(SID, json_data)
                     if nextrun <= date_obj and lastrun != date_obj:
-<<<<<<< HEAD
-                        print "It is a candidate add for Q"
-                        add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
-                        if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
-                            print SID + " Job added to Queue succesfully !"
-=======
                         print ("It is a candidate add for Q")
                         add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                         if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
                             print (SID + " Job added to Queue succesfully !")
->>>>>>> 2330bf3 (Porting the jenkins-ci code from Python2 to Python3)
                         if BUILDFREQ == 'daily':
                             json_data['NEXTRUN'] = commonlib.oneday(LASTRUN)
                         if BUILDFREQ == 'weekly':
