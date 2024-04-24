@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
 #
 # Copyright: 2017 IBM
 # Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
-#       : Harish <harish@linux.vnet.ibm.com>
+#       : Harish <harisrir@linux.vnet.ibm.com>
 
 import os
 import json
@@ -22,13 +22,12 @@ import logging
 import fcntl
 import sys
 import subprocess
-import commands
-import ConfigParser
+import configparser
 import pexpect
 import datetime
 import time
 
-config_details = ConfigParser.ConfigParser()
+config_details = configparser.ConfigParser(interpolation=None)
 config_details.read(os.path.join(os.path.dirname(__file__), 'details.ini'))
 repo = config_details.get('Details', 'repo')
 autotest_repo = config_details.get('Details', 'autotest_repo')
@@ -55,7 +54,7 @@ BASEPKG = ['git', 'telnet', 'rpm', 'python', 'flex', 'bison']
 def get_output(cmd):
     commit = subprocess.Popen(
         [cmd], stdout=subprocess.PIPE, shell=True).communicate()[0]
-    return commit.replace('\n', '')
+    return str (commit).replace('\n', '')
 
 
 def detect_distro(obj, console):
@@ -209,20 +208,20 @@ def update_json(path, json_details):
 def tar_name(git, branch):
     git = re.split(".org|.com", git, 1)[1][1:]
     git = git.replace('/', '_')
-    return git + '_' + branch
+    return str (git) + '_' + branch
 
 
 def tar(folder, tar_folder):
     os.chdir(folder)
     if os.path.isdir(tar_folder):  # Handling with proper git name
-        print "Tarring " + tar_folder
+        print("Tarring " + tar_folder)
         os.system('tar -czf ' + tar_folder +
                   '.tar.gz ' + tar_folder)
 
 
 def untar(tar_file, dest='.'):
     if os.path.exists(tar_file):
-        print "Untarring " + tar_file
+        print("Untarring " + tar_file)
         os.system('tar -xzf ' + tar_file + ' -C ' + dest)
 
 

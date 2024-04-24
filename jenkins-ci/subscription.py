@@ -148,7 +148,7 @@ def main():
         commonlib.base_path + '/subscribers.json', subscribers_json)
 
     create_sidfile(json_details, subscribers_json['SID'])
-    print subscribers_json['SID']
+    print (subscribers_json['SID'])
 
 if __name__ == '__main__':
     main()

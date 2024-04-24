@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ import os
 import sys
 import argparse
 import logging
-import commands
+import subprocess
 sys.path.append(
     os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 from lib import common_lib as commonlib
@@ -32,7 +32,7 @@ from lib import common_lib as commonlib
 def cleanup(cur_path, tar_name, flag):
     logging.info('CLEAN UP PROCESS')
     if os.path.exists(cur_path + tar_name + '.tar.gz'):
-        print cur_path + tar_name + '.tar.gz'
+        print(cur_path + tar_name + '.tar.gz')
         os.system('rm -rf ' + cur_path + tar_name + '.tar.gz')
     if os.path.exists(cur_path + tar_name):
         os.system('rm -rf ' + cur_path + tar_name)
@@ -90,7 +90,6 @@ def main():
     cur_path = commonlib.get_output('pwd') + '/'
     completion_json = commonlib.read_json(
         commonlib.base_path + 'completion.json')
-
     if not os.path.exists(commonlib.repo_path) or not os.path.exists(commonlib.hostcopy_path):
         os.system('mkdir ' + commonlib.repo_path)
         os.system('mkdir ' + commonlib.hostcopy_path)
@@ -203,7 +202,7 @@ def main():
                     fd.close()
         logging.info("\nFollowing repos updated:\n")
         for line in open(repofile, 'r').readlines():
-            print line.strip('\n')
+            print(line.strip('\n'))
 
     else:
         check_flag = False
