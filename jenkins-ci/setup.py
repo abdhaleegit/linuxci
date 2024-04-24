@@ -36,8 +36,8 @@ def compare_sub_tests(list1, list2):
     for test in list2:
         second_list = second_list + test
     if second_list in first_list:
-        print second_list
-        print first_list
+        print (second_list)
+        print (first_list)
         return True
     return False
 
@@ -54,7 +54,7 @@ def remove_sid(path, sid):
 def cleanup(cur_path, tar_name, sid):
     logging.info('CLEAN UP PROCESS')
     if os.path.exists(cur_path + tar_name + '.tar.gz'):
-        print cur_path + tar_name + '.tar.gz'
+        print (cur_path + tar_name + '.tar.gz')
         os.system('rm -rf ' + cur_path + tar_name + '.tar.gz')
     if os.path.exists(cur_path + tar_name):
         os.system('rm -rf ' + cur_path + tar_name)
@@ -82,7 +82,7 @@ def complete_json(options):
 
 
 def pull_and_tar(cur_path, tar_name, branch):
-    print "Common pull and Tar"
+    print ("Common pull and Tar")
     logging.info("Pulling to latest commit")
     os.system('git config merge.renameLimit 999999')
     os.system('git fetch origin')
@@ -120,7 +120,7 @@ def main():
     parser.add_argument("--tests", action="store", dest="tests", help="Specify the tests to be performed on the host\
                         Usage: --tests test_name1,test_name2,test_name3")
     parser.add_argument("--host", action="store", dest="host", help="Specify the host details\
-                        Usage: --host hostname=hostname,username=username,password=password")
+                        Usage: --host hostname=hostname,username=username,password=passw0rd")
     parser.add_argument("--next", action="store", dest="next", help="For updation of tar\
                         Usage: --next True")
     parser.add_argument("--buildonly", action="store", dest="buildonly", help="To specify build-only runs\
