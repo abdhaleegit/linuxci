@@ -47,6 +47,9 @@ def create_sidfile(json_details, sid_file):
     sid_json['URL'] = json_details['git']
     sid_json['BRANCH'] = json_details['branch']
     sid_json['COMMITID'] = None
+    sid_json['GOOD'] = None
+    sid_json['BAD'] = None
+    sid_json['HEAD'] = None
     sid_json['LASTRUN'] = None
     sid_json['NEXTRUN'] = None
     sid_json['BUILDFREQ'] = json_details['build_freq']

@@ -30,6 +30,7 @@ SID = ''
 sidfile = commonlib.base_path + SID + '/' + SID + '.json'
 date_str = datetime.datetime.now().strftime('%Y_%m_%d')
 date_obj = datetime.datetime.strptime(date_str, '%Y_%m_%d')
+TODAY = datetime.datetime.today().strftime('%A')
 
 def form_sid(sid, mailid, git, branch, tests, avtest):
     git = git.split('/')[-2]
@@ -194,37 +195,47 @@ def main():
         BRANCH = json_data['BRANCH']
         while not check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
 
-            if LASTRUN is None:
-                if BUILDFREQ == 'daily':
-                    json_data['NEXTRUN'] = commonlib.oneday(date_str)
-                if BUILDFREQ == 'weekly':
-                    json_data['NEXTRUN'] = commonlib.oneweek(date_str)
-                if BUILDFREQ == 'monthly':
-                    json_data['NEXTRUN'] = commonlib.onemonth(date_obj)
-                update_datafile(SID, json_data)
-                print "always a candidate for Q"
-                add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
-                if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
-                    print SID + " Job added to Queue succesfully !"
-            else:
-                lastrun = datetime.datetime.strptime(LASTRUN, '%Y_%m_%d')
-                if NEXTRUN is not None:
-                    nextrun = datetime.datetime.strptime(NEXTRUN, '%Y_%m_%d')
-                if lastrun > nextrun:
-                    json_data['LASTRUN'] = date_str
+            if 'day' in BUILDFREQ:
+                if LASTRUN is None or NEXTRUN is None:
+                    json_data['LASTRUN'] = json_data['NEXTRUN'] = BUILDFREQ
                     update_datafile(SID, json_data)
-                if nextrun <= date_obj and lastrun != date_obj:
-                    print "It is a candidate add for Q"
+                if BUILDFREQ == TODAY or NEXTRUN == TODAY :
                     add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
                     if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
                         print SID + " Job added to Queue succesfully !"
+
+            else:
+                if LASTRUN is None:
                     if BUILDFREQ == 'daily':
-                        json_data['NEXTRUN'] = commonlib.oneday(LASTRUN)
+                        json_data['NEXTRUN'] = commonlib.oneday(date_str)
                     if BUILDFREQ == 'weekly':
-                        json_data['NEXTRUN'] = commonlib.oneweek(LASTRUN)
+                        json_data['NEXTRUN'] = commonlib.oneweek(date_str)
                     if BUILDFREQ == 'monthly':
-                        json_data['NEXTRUN'] = commonlib.onemonth(lastrun)
+                        json_data['NEXTRUN'] = commonlib.onemonth(date_obj)
                     update_datafile(SID, json_data)
+                    print "always a candidate for Q"
+                    add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
+                    if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
+                        print SID + " Job added to Queue succesfully !"
+                else:
+                    lastrun = datetime.datetime.strptime(LASTRUN, '%Y_%m_%d')
+                    if NEXTRUN is not None:
+                        nextrun = datetime.datetime.strptime(NEXTRUN, '%Y_%m_%d')
+                    if lastrun > nextrun:
+                        json_data['LASTRUN'] = date_str
+                        update_datafile(SID, json_data)
+                    if nextrun <= date_obj and lastrun != date_obj:
+                        print "It is a candidate add for Q"
+                        add_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST)
+                        if check_job_inQ(SID, MAILID, GIT, BRANCH, TESTS, AVTEST):
+                            print SID + " Job added to Queue succesfully !"
+                        if BUILDFREQ == 'daily':
+                            json_data['NEXTRUN'] = commonlib.oneday(LASTRUN)
+                        if BUILDFREQ == 'weekly':
+                            json_data['NEXTRUN'] = commonlib.oneweek(LASTRUN)
+                        if BUILDFREQ == 'monthly':
+                            json_data['NEXTRUN'] = commonlib.onemonth(lastrun)
+                        update_datafile(SID, json_data)
             break
     print "\nList all jobs in Queue . . .  \n"
     print_Q()

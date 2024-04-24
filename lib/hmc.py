@@ -14,7 +14,6 @@
 # Copyright: 2017 IBM
 # Author: Abdul Haleem <abdhalee@linux.vnet.ibm.com>
 #       : Harish <harish@linux.vnet.ibm.com>
-#       : Rajashree Rajendran <rajashre@in.ibm.com>
 
 import os
 import sys
@@ -75,8 +74,10 @@ class hmc:
 
     def check_kernel_panic(self, console):
         list = [
-            "WARNING: CPU:", "Kernel panic", "Aieee", "soft lockup", "not syncing", "Oops", "Bad trap at PC",
-            "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)", pexpect.TIMEOUT]
+            "WARNING: CPU:", "Kernel panic - not syncing:", "Aieee", "soft lockup", "Oops", "Bad trap at PC",
+            "Unable to handle kernel NULL pointer", "Unable to mount root device", "grub>", "grub rescue", "\(initramfs\)",
+            "Segfault", "Unable to handle paging request", "rcu_sched detected stalls", "NMI backtrace for cpu", "'Call Trace:",
+            "WARNING: at", "INFO: possible recursive locking detected", "Kernel BUG at", "double fault:", pexpect.TIMEOUT]
         try:
             rc = console.expect(list, timeout=120)
             if rc in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
@@ -133,7 +134,7 @@ class hmc:
 
     def bso_auth(self, console, username, password):
         time.sleep(2)
-        console.sendline('telnet 9.xx.xx.xx')
+        console.sendline('telnet github.com')
         console.send("\r")
         time.sleep(5)
         try:
@@ -202,6 +203,11 @@ class hmc:
             "lssyscfg -r sys -F lpar_proc_compat_modes -m " + server_name)
         return res
 
+    def get_lpar_curr_profile(self, server_name, lpar_name):
+        profile = self.run_command(
+            "lssyscfg -r lpar -m " + server_name + " --filter lpar_names=" + lpar_name + " -F curr_profile")
+        return profile.split()[-1]
+
     def get_lpar_console(self, hmc_username, hmc_password, server_name, lpar_name, login_id, passwd):
         print "De-activating the console"
         self.run_command("rmvterm -m " + server_name + " -p " + lpar_name)
@@ -217,7 +223,7 @@ class hmc:
             print "Opening the LPAR console"
             con.sendline("mkvterm -m " + server_name + " -p " + lpar_name)
             con.send('\r')
-            i = con.expect(["Open Completed.", pexpect.TIMEOUT], timeout=30)
+            i = con.expect(["Open Completed.", pexpect.TIMEOUT], timeout=60)
             con.send('\r')
             con.logfile = sys.stdout
             con.delaybeforesend = 0.9
@@ -257,13 +263,15 @@ class hmc:
         # 8. send the no. and
         # 9. send 2  for normal boot
         # 10. send 1  to say Yes
+        profile = self.get_lpar_curr_profile(
+            server_name, lpar_name).strip('\n')
         print "Shutting down LPAR"
         self.run_command(
             'chsysstate -r lpar -o shutdown --immed -m ' + server_name + ' -n ' + lpar_name)
         self.s.prompt(timeout=30)
         print "Booting LPAR to SMS menu"
         self.run_command(
-            'chsysstate -r lpar -b sms -o on -m ' + server_name + ' -n ' + lpar_name)
+            'chsysstate -r lpar -b sms -o on -m ' + server_name + ' -n ' + lpar_name + ' -f ' + profile)
         self.s.send('\r')
         con = pexpect.spawn("ssh " + self.user_name + "@" + self.host_ip)
         con.logfile = sys.stdout
@@ -280,9 +288,13 @@ class hmc:
             print "\nActivating Console"
             con.sendline("mkvterm -m " + server_name + " -p " + lpar_name)
             con.send('\r')
-            con.send('\r')
             time.sleep(20)
-            i = con.expect(["Main Menu", pexpect.TIMEOUT], timeout=30)
+            i = con.expect(["Invalid entry", pexpect.TIMEOUT], timeout=60)
+            if i ==0:
+                con.send('\r')
+                con.logfile = sys.stdout
+                con.delaybeforesend = 0.9
+            i = con.expect(["Main Menu", pexpect.TIMEOUT], timeout=60)
             if i == 0:
                 i = con.expect(["key:", pexpect.TIMEOUT], timeout=30)
                 if i == 0:
@@ -350,7 +362,7 @@ class hmc:
                                                     con.send('1')
                                                     con.send('\r')
                                                     log_in = con.expect(
-                                                        ["login:", pexpect.TIMEOUT], timeout=300)
+                                                        ["login:", pexpect.TIMEOUT], timeout=600)
                                                     if log_in == 0:
                                                         return "Login"
                                     if flag == False:
