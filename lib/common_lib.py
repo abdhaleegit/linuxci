@@ -27,7 +27,7 @@ import pexpect
 import datetime
 import time
 
-config_details = configparser.ConfigParser(interpolation=None)
+config_details = configparser.ConfigParser()
 config_details.read(os.path.join(os.path.dirname(__file__), 'details.ini'))
 repo = config_details.get('Details', 'repo')
 autotest_repo = config_details.get('Details', 'autotest_repo')
